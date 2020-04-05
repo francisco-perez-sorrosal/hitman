@@ -1,0 +1,1 @@
+from .flask_serving import flask_app
