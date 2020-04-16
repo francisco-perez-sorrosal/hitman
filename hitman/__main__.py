@@ -42,10 +42,12 @@ def dataclass_from_dict(data_class, dictionary):
 
 
 @hitman_cli.command()
+@click.option('--dummy_workload', is_flag=True)
 @click.option('--workload_type',
               type=click.Choice(['cpu_bound', 'io_bound', 'mixed'], case_sensitive=False))
 @click.option('--workload_batch', default=100, help='requests in each batch that will be consumed by workers')
 @click.option('--max_requests_per_sec', default=math.inf, help='max requests/sec')
+@click.option('--endpoint', default="http://localhost:5000/bert_preprocessing", help='Server endpoint to hit')
 @click.option('--child_concurrency', default=25, help='child_concurrency')
 @click.pass_context
 def client(ctx, **kwargs):
@@ -66,7 +68,7 @@ def server(ctx, **kwargs):
     if kwargs['framework'] == 'flask':
         workers = ctx.obj['workers']
         logger.info("Workers: {}".format(workers))
-        # options = {  # These cause weird effects
+        # options = {  # Passing this to flask_app.run, causes weird effects
         #     'threaded': False,
         #     'processes': workers
         # }

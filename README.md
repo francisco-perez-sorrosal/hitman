@@ -71,3 +71,14 @@ docker pull nvcr.io/nvidia/tensorrt:20.03-py3
 
 sudo docker network create inference_network
 sudo docker run --gpus '"device=0"' --rm -p8000:8000 --shm-size=1g --ulimit  memlock=-1 --ulimit stack=67108864 --net inference_network --network-alias=trt_server -v/home/fperez/dev/models/tensorrt:/models nvcr.io/nvidia/tensorrt:20.03-py3 giexec --onnx=/models/bert-onnx/test/oic.onnx --device=0 --safe
+
+
+
+
+1K Q/sec
+prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 4 -b 127.0.0.1:5000 -k gevent --worker-connections 2048 --threads 1 --timeout 30 --keep-alive 30 --backlog 4096  hitman.__main__:flask_app
+prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 2 --tcp_conn_workers 400 --debug client --workload_type cpu_bound --child_concurrency 75 --workload_batch 425 --max_requests_per_sec 1024
+
+1.5K Q/sec
+prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 16 -b 127.0.0.1:5000 -k gthread --worker-connections 2048 --threads 8 --timeout 30 --keep-alive 30 --backlog 4096  --preload hitman.__main__:flask_app
+prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 8 --tcp_conn_workers 200 --debug client --workload_type cpu_bound --child_concurrency 50 --workload_batch 2000 --max_requests_per_sec 2048

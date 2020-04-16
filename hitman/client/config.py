@@ -1,6 +1,6 @@
 import multiprocessing
 from dataclasses import dataclass
-from prometheus_client import CollectorRegistry
+
 
 @dataclass
 class MasterClientConfig:
@@ -13,7 +13,9 @@ class MasterClientConfig:
 
 @dataclass
 class ClientConfig:
+    dummy_workload: bool
     workload_type: str
     workload_batch: int
     max_requests_per_sec: int
+    endpoint: str
     child_concurrency: int

@@ -3,10 +3,13 @@ import time
 from socket import getfqdn
 
 import prometheus_client
-from flask import Flask
-from flask import request, Response
-from prometheus_client import Counter, Histogram, CONTENT_TYPE_LATEST
 
+from datetime import datetime
+from flask import Flask, request, Response, jsonify
+from prometheus_client import Counter, Histogram, CONTENT_TYPE_LATEST
+from transformers import InputExample
+
+from hitman.client.preprocessing import input_to_vector, get_tokenizer
 from hitman.utils.chron import Timer
 from hitman.utils.log import setup_prometheus
 
@@ -19,6 +22,12 @@ hostname = getfqdn()
 prometheus_registry = None
 
 flask_metrics = {}
+
+model_type = 'bert'
+model_name = 'bert-base-uncased'
+max_seq_length = 512
+
+tokenizer = get_tokenizer(model_type=model_type, model_name=model_name, do_lower_case=True)
 
 
 def create_app(config_object="hitman.server.flask.config"):
@@ -89,41 +98,85 @@ def stop_timer(response):
 
 
 def record_request_data(response):
-    flask_metrics['web_request_count'].labels(hostname, 'webapp', request.method, request.path, response.status_code).inc()
+    flask_metrics['web_request_count'].labels(hostname, 'webapp', request.method, request.path,
+                                              response.status_code).inc()
     return response
 
-from flask import make_response, jsonify
-from datetime import datetime
 
-@flask_app.route('/bert_preprocessing', methods=['POST'])
-def bert_tokenizer():
-
-    form = request.form
-
+def process_dummy_workload(form):
+    t = Timer().start()
     if form['workload_type'] == 'io_bound':
         time.sleep(flask_app.config["DUMMY_REQ_PROC_TIME_SECS"])
     elif form['workload_type'] == 'cpu_bound':
-        t = Timer().start()
         j = 0
         for i in range(100000):
             j += 1
-        print(t.stop())
     elif form['workload_type'] == 'mixed':
-        t = Timer().start()
         j = 0
         for i in range(100000):
             j += 1
         time.sleep(flask_app.config["DUMMY_REQ_PROC_TIME_SECS"])
-        print(t.stop())
-
     else:
         raise RuntimeError(form['workload_type'] + " workload not supported!")
 
     data = {'pid': form['pid'],
             'code': 'SUCCESS',
             'req_id': form['req_id'],
-            'time': datetime.utcnow()}
+            'time': datetime.utcnow(),
+            'proc_secs': t.stop()}
+
+    return data
+
+
+def perform_triton_request(data):
+    pass
+
+
+def process_real_workload(form):
+    if form['workload_type'] == 'cpu_bound':
+        data = query_to_vector(form)
+    elif form['workload_type'] == 'mixed':
+        data = query_to_vector(form)
+        perform_triton_request(data)
+    else:
+        raise RuntimeError(form['workload_type'] + " workload not supported!")
+    return data
+
+
+def query_to_vector(form):
+    t = Timer().start()
+    example = InputExample(form['pid'] + "_" + form['req_id'], form['text_a'] + " " + form['url'], form['text_b'])
+    input_ids, attention_mask, token_type_ids = input_to_vector(example,
+                                                                tokenizer,
+                                                                max_length=max_seq_length,
+                                                                # pad on the left for xlnet
+                                                                pad_on_left=bool(model_type in ['xlnet']),
+                                                                pad_token=
+                                                                tokenizer.convert_tokens_to_ids(
+                                                                    [tokenizer.pad_token])[
+                                                                    0],
+                                                                pad_token_segment_id=4 if model_type in [
+                                                                    'xlnet'] else 0,
+                                                                )
+
+    data = {'pid': form['pid'],
+            'code': 'SUCCESS',
+            'req_id': form['req_id'],
+            'time': datetime.utcnow(),
+            'proc_secs': t.stop(),
+            'input_ids': input_ids,
+            'attention_mask': attention_mask,
+            'token_type_ids': token_type_ids
+            }
+    return data
+
+
+@flask_app.route('/bert_preprocessing', methods=['POST'])
+def bert_tokenizer():
+    form = request.form
+    data = process_dummy_workload(form) if form['is_dummy_workload'] == True else process_real_workload(form)
     return jsonify(data), 200
+
 
 @flask_app.errorhandler(500)
 def handle_500(error):
