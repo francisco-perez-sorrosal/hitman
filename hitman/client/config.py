@@ -18,4 +18,5 @@ class ClientConfig:
     workload_batch: int
     max_requests_per_sec: int
     endpoint: str
+    source_data: str
     child_concurrency: int

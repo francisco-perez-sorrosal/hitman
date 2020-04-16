@@ -1,4 +1,5 @@
 import asyncio
+import csv
 import logging
 import os
 import time
@@ -94,24 +95,28 @@ data_queue = MPQueue()
 
 class DataReader(Process):
 
-    def __init__(self):
+    def __init__(self, source_datafile):
         super(DataReader, self).__init__()
+
+        self.lines = []
+        logger.info("Reading data from file: {}".format(source_datafile))
+        with open(source_datafile) as tsvfile:
+            reader = csv.DictReader(tsvfile, dialect='excel-tab')
+            for row in reader:
+                self.lines.append(row)
+        self.n_of_lines = len(self.lines)
+        logger.info("Rows read: {}".format(self.n_of_lines))
 
     def run(self) -> None:
         i = 0
         while True:
             logger.debug("Producing request {}".format(i)) if i % 1000 == 0 else None
-            data = {
-                'req_id': i,
-                'url': "https opticsplanet com  sig-sauer-sot46001.html   utm_source yahoo utm_medium cpc utm_campaign brands gemini op dpa",
-                'text_a': "Sig Sauer Tango4 6-24x50 Riflescope, MOA Milling Illum. Reticle",
-                'text_b': "                                     Mounted on a 50 bmg. Super nice quality, very clear. zeroed really easy, illumination works great. turrets track nicely when you dial, and zero stop works as it should. tango series comes with a free set of custom turrets when you send in for them. a...                                          Read More..."
-            }
+            data = self.lines[i % self.n_of_lines]
+            data['req_id'] = i
             data_queue.put(data)
             if data_queue.full():
                 logger.debug("Queue full. Avoid producing elements super fast. Sleeping 15 sec...")
                 time.sleep(15)
-
             i += 1
 
 
@@ -123,7 +128,7 @@ class MasterClient:
 
         if not self.client_config.dummy_workload:
             logger.info("Starting data reader process...")
-            self.data_reader = DataReader()
+            self.data_reader = DataReader(self.client_config.source_data)
             self.data_reader.start()
 
         init_prometeus_registry(self.master_config.prometheus_port)

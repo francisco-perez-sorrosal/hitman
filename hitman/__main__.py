@@ -48,6 +48,7 @@ def dataclass_from_dict(data_class, dictionary):
 @click.option('--workload_batch', default=100, help='requests in each batch that will be consumed by workers')
 @click.option('--max_requests_per_sec', default=math.inf, help='max requests/sec')
 @click.option('--endpoint', default="http://localhost:5000/bert_preprocessing", help='Server endpoint to hit')
+@click.option('--source_data', default="resources/examples.tsv", help='Default source of examples')
 @click.option('--child_concurrency', default=25, help='child_concurrency')
 @click.pass_context
 def client(ctx, **kwargs):
