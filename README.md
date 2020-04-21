@@ -1,5 +1,7 @@
 # Hitman
 
+[![Build Status](https://travis-ci.org/francisco-perez-sorrosal/hitman.svg?branch=master)](https://travis-ci.org/francisco-perez-sorrosal/hitman)
+
 ```shell script
 pip install -e .
 ```
