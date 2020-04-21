@@ -1,5 +1,6 @@
 aiohttp
 aiomultiprocess
+environs
 flask
 prometheus_client
 pytest
