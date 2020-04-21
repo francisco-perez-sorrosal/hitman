@@ -1,8 +1,9 @@
-ratelimiter
-prometheus_client
-aiomultiprocess
 aiohttp
-transformers
+aiomultiprocess
+flask
+prometheus_client
 pytest
 pytest-cov
 pylint
+ratelimiter
+transformers
