@@ -1,6 +1,6 @@
 import numpy
 
-from hitman.client.preprocessing import get_tokenizer, input_to_vector
+from hitman.server.flask.preprocessing import get_tokenizer, input_to_vector
 from transformers import BertTokenizer, InputExample
 
 

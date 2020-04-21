@@ -9,7 +9,7 @@ from flask import Flask, request, Response, jsonify
 from prometheus_client import Counter, Histogram, CONTENT_TYPE_LATEST
 from transformers import InputExample
 
-from hitman.client.preprocessing import input_to_vector, get_tokenizer
+from hitman.server.flask.preprocessing import input_to_vector, get_tokenizer
 from hitman.utils.chron import Timer
 from hitman.utils.log import setup_prometheus
 
