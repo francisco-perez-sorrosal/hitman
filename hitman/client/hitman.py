@@ -41,6 +41,7 @@ async def process_request(work):
     else:
         payload = {'is_dummy_workload': False, 'pid': str(pid), 'req_id': str(data['req_id']),
                    'workload_type': workload_type,
+                   'inference': 'local',  # TODO make this configurable
                    'url': data['url'], 'text_a': data['text_a'], 'text_b': data['text_b']}
 
     timer = Timer().start()

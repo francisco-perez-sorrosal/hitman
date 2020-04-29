@@ -5,9 +5,11 @@ from socket import getfqdn
 import prometheus_client
 
 from datetime import datetime
+
+import torch
 from flask import Flask, request, Response, jsonify
 from prometheus_client import Counter, Histogram, CONTENT_TYPE_LATEST
-from transformers import InputExample
+from transformers import InputExample, BertForSequenceClassification
 
 from hitman.server.flask.preprocessing import input_to_vector, get_tokenizer
 from hitman.utils.chron import Timer
@@ -26,6 +28,8 @@ flask_metrics = {}
 model_type = 'bert'
 model_name = 'bert-base-uncased'
 max_seq_length = 512
+
+pytorch_model = None
 
 tokenizer = get_tokenizer(model_type=model_type, model_name=model_name, do_lower_case=True)
 
@@ -66,6 +70,10 @@ def create_app(config_object="hitman.server.flask.config"):
                                                              ['host', 'app_name', 'endpoint'],
                                                              registry=prometheus_registry,
                                                              )
+            flask_metrics['inference_latency'] = Histogram('inference_latency_seconds', 'Inference latency',
+                                                             ['host', 'app_name', 'endpoint'],
+                                                             registry=prometheus_registry,
+                                                             )
             logger.info("Flask metrics registered")
         else:
             logger.warning('No prometheus registry was registered!!!!!')
@@ -75,6 +83,10 @@ def create_app(config_object="hitman.server.flask.config"):
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
     app.logger.setLevel(gunicorn_logger.level)
+
+    global pytorch_model
+    pytorch_model = BertForSequenceClassification.from_pretrained(app.config.get('PYTORCH_MODEL_PATH'))
+    logger.info("Pytorch model loaded from {}".format(app.config.get('PYTORCH_MODEL_PATH')))
 
     return app
 
@@ -132,12 +144,28 @@ def perform_triton_request(data):
     pass
 
 
+def perform_local_request(data, device='cpu'):
+    inputs = {
+        'input_ids': torch.LongTensor(data['input_ids']).to(device).reshape(1, max_seq_length),
+        'attention_mask': torch.LongTensor(data['attention_mask']).to(device).reshape(1, max_seq_length),
+        'token_type_ids': torch.LongTensor(data['token_type_ids']).to(device).reshape(1, max_seq_length)
+    }
+    start = time.time()
+    outputs = pytorch_model(**inputs)
+    elapsed_time = time.time() - start
+    logger.info("Inference elapsed time {}".format(elapsed_time))
+    flask_metrics['inference_latency'].labels(hostname, 'webapp', request.path).observe(elapsed_time)
+
+
 def process_real_workload(form):
     if form['workload_type'] == 'cpu_bound':
         data = query_to_vector(form)
     elif form['workload_type'] == 'mixed':
         data = query_to_vector(form)
-        perform_triton_request(data)
+        if form['inference'] == 'local':
+            perform_local_request(data)
+        else:
+            perform_triton_request(data)
     else:
         raise RuntimeError(form['workload_type'] + " workload not supported!")
     return data
