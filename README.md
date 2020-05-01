@@ -74,8 +74,9 @@ docker pull nvcr.io/nvidia/tensorrt:20.03-py3
 sudo docker network create inference_network
 sudo docker run --gpus '"device=0"' --rm -p8000:8000 --shm-size=1g --ulimit  memlock=-1 --ulimit stack=67108864 --net inference_network --network-alias=trt_server -v/home/fperez/dev/models/tensorrt:/models nvcr.io/nvidia/tensorrt:20.03-py3 giexec --onnx=/models/bert-onnx/test/oic.onnx --device=0 --safe
 
-
-
+Single request/sec (Test mode)
+prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 1 --tcp_conn_workers 400 --debug client --workload_type mixed --child_concurrency 75 --workload_batch 1 --max_requests_per_sec 1
+prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 1 -b 127.0.0.1:5000 --log-level=debug -k gevent --worker-connections 150 --threads 1 --timeout 30 --keep-alive 30 --backlog 4096  --preload hitman.__main__:flask_app
 
 1K Q/sec
 prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 4 -b 127.0.0.1:5000 -k gevent --worker-connections 2048 --threads 1 --timeout 30 --keep-alive 30 --backlog 4096  hitman.__main__:flask_app
@@ -84,3 +85,26 @@ prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 2 --tcp_con
 1.5K Q/sec
 prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 16 -b 127.0.0.1:5000 -k gthread --worker-connections 2048 --threads 8 --timeout 30 --keep-alive 30 --backlog 4096  --preload hitman.__main__:flask_app
 prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 8 --tcp_conn_workers 200 --debug client --workload_type cpu_bound --child_concurrency 50 --workload_batch 2000 --max_requests_per_sec 2048
+
+
+# Torch serve
+
+#### Point to the BERT files and create .mar
+torch-model-archiver --model-name bert_base_test --version 1.0 --serialized-file /Users/fperez/dev/models/pytorch_model.bin --extra-files /Users/fperez/dev/models/vocab.txt,/Users/fperez/dev/models/config.json --handler /Users/fperez/dev/hitman/hitman/torch_serve_handler.py
+mv bert_base_test.mar ~/dev/model_store
+
+#### Start the server
+torchserve --start --ts-config ~/dev/hitman/resources/config.properties --model-store ~/dev/model_store --models all
+
+#### Change config a bit
+curl -v -X POST "localhost:8081/models?url=bert_base_test.mar&batch_size=8&max_batch_delay=1000&initial_workers=1"
+
+curl -v -X PUT "localhost:8081/models/bert_base_test?max_workers=1"
+#### Check config
+curl localhost:8081/models/bert_base_test
+
+#### Start the server
+torchserve --stop
+
+#### Note arrays to work should be 512 elements (BERT's max_seq_len)
+curl --header "Content-Type: application/json" -X POST localhost:8080/predictions/bert_base_test --data '{"input_ids": [101,9033,2290], "attention_mask": [1,1,1], "token_type_ids": [1,1,1]}'

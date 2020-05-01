@@ -1,11 +1,11 @@
+import json
 import logging
 import time
+from datetime import datetime
 from socket import getfqdn
 
 import prometheus_client
-
-from datetime import datetime
-
+import requests
 import torch
 from flask import Flask, request, Response, jsonify
 from prometheus_client import Counter, Histogram, CONTENT_TYPE_LATEST
@@ -71,9 +71,9 @@ def create_app(config_object="hitman.server.flask.config"):
                                                              registry=prometheus_registry,
                                                              )
             flask_metrics['inference_latency'] = Histogram('inference_latency_seconds', 'Inference latency',
-                                                             ['host', 'app_name', 'endpoint'],
-                                                             registry=prometheus_registry,
-                                                             )
+                                                           ['host', 'app_name', 'endpoint'],
+                                                           registry=prometheus_registry,
+                                                           )
             logger.info("Flask metrics registered")
         else:
             logger.warning('No prometheus registry was registered!!!!!')
@@ -144,6 +144,19 @@ def perform_triton_request(data):
     pass
 
 
+def perform_tensorserve_request(data):
+    logger.debug("Tensorserve request! Data: {}".format(data))
+    bert_filtered_data = {
+        'input_ids': json.dumps(data['input_ids']),
+        'attention_mask': json.dumps(data['attention_mask']),
+        'token_type_ids': json.dumps(data['token_type_ids'])
+    }
+
+    resp_j = requests.post("http://localhost:8080/predictions/bert_base_test",
+                           data=bert_filtered_data)
+    logger.info("Tensorserve resp: {}".format(resp_j))
+
+
 def perform_local_request(data, device='cpu'):
     inputs = {
         'input_ids': torch.LongTensor(data['input_ids']).to(device).reshape(1, max_seq_length),
@@ -165,9 +178,13 @@ def process_real_workload(form):
         if form['inference'] == 'local':
             perform_local_request(data)
         else:
-            perform_triton_request(data)
+            # perform_triton_request(data)
+            data = perform_tensorserve_request(data)
+            logger.info("DATA {}".format(data))
+            data = json.dumps({'torchserve_resp': data})
     else:
         raise RuntimeError(form['workload_type'] + " workload not supported!")
+
     return data
 
 

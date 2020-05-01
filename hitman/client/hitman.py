@@ -28,7 +28,7 @@ def init_prometeus_registry(port):
 
 
 async def process_request(work):
-    endpoint, is_dummy_workload, workload_type, data = work
+    endpoint, is_dummy_workload, inference_type, workload_type, data = work
 
     worker_data.gauge.inc()
     worker_data.counter.labels(direction='out').inc()
@@ -41,7 +41,7 @@ async def process_request(work):
     else:
         payload = {'is_dummy_workload': False, 'pid': str(pid), 'req_id': str(data['req_id']),
                    'workload_type': workload_type,
-                   'inference': 'local',  # TODO make this configurable
+                   'inference': inference_type,
                    'url': data['url'], 'text_a': data['text_a'], 'text_b': data['text_b']}
 
     timer = Timer().start()
@@ -57,12 +57,13 @@ async def process_request(work):
     return resp_j
 
 
-def rate_limited_iterator(source_data_queue, workload_batch, endpoint, is_dummy_workload, workload_type, rate_limiter):
+def rate_limited_iterator(source_data_queue, workload_batch, endpoint, is_dummy_workload, inference_type, workload_type,
+                          rate_limiter):
     i = 0
     while i < workload_batch:
         with rate_limiter:
             data = source_data_queue.get()
-            yield endpoint, is_dummy_workload, workload_type, data
+            yield endpoint, is_dummy_workload, inference_type, workload_type, data
             i += 1
 
 
@@ -142,6 +143,7 @@ class MasterClient:
         logger.info("Workers: {}".format(self.master_config.workers))
         logger.info("Child concurrency: {}".format(self.client_config.child_concurrency))
         logger.info("Dummy workload? {}".format(self.client_config.dummy_workload))
+        logger.info("Inference type: {}".format(self.client_config.inference_type))
         logger.info("Workload type: {}".format(self.client_config.workload_type))
         logger.info("Workload batch: {}".format(self.client_config.workload_batch))
         logger.info("Rate limiter set with {} req/sec".format(self.client_config.max_requests_per_sec))
@@ -162,6 +164,7 @@ class MasterClient:
                                                                                 self.client_config.workload_batch,
                                                                                 self.client_config.endpoint,
                                                                                 self.client_config.dummy_workload,
+                                                                                self.client_config.inference_type,
                                                                                 self.client_config.workload_type,
                                                                                 rate_limiter))
 

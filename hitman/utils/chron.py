@@ -1,8 +1,8 @@
 from __future__ import annotations
+
 import time
 from contextlib import ContextDecorator
 from dataclasses import dataclass, field
-
 from typing import Any, Callable, ClassVar, Dict, Optional
 
 
@@ -33,14 +33,14 @@ class Timer(ContextDecorator):
         self._start_time = time.perf_counter()
         return self
 
-    def stop(self, do_log=False) -> float:
+    def stop(self, do_log=False, reset=False) -> float:
         """Stop the timer, and report the elapsed time"""
         if self._start_time is None:
             raise TimerError(f"Timer is not running. Use .start() to start it")
 
         # Calculate elapsed time
         elapsed_time = time.perf_counter() - self._start_time
-        self._start_time = None
+        self._start_time = None if reset else None
 
         # Report elapsed time
         if self.logger and do_log:

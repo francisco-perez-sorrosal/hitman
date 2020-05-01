@@ -14,6 +14,7 @@ class MasterClientConfig:
 @dataclass
 class ClientConfig:
     dummy_workload: bool
+    inference_type: str
     workload_type: str
     workload_batch: int
     max_requests_per_sec: int

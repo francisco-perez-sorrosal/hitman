@@ -43,6 +43,8 @@ def dataclass_from_dict(data_class, dictionary):
 
 @hitman_cli.command()
 @click.option('--dummy_workload', is_flag=True)
+@click.option('--inference_type',
+              type=click.Choice(['local', 'torchserve'], case_sensitive=False))
 @click.option('--workload_type',
               type=click.Choice(['cpu_bound', 'io_bound', 'mixed'], case_sensitive=False))
 @click.option('--workload_batch', default=100, help='requests in each batch that will be consumed by workers')
@@ -52,6 +54,8 @@ def dataclass_from_dict(data_class, dictionary):
 @click.option('--child_concurrency', default=25, help='child_concurrency')
 @click.pass_context
 def client(ctx, **kwargs):
+    if kwargs['inference_type'] is None:
+        kwargs['inference_type'] = 'torchserve'
     if kwargs['workload_type'] is None:
         kwargs['workload_type'] = 'io_bound'
     master_config = dataclass_from_dict(data_class=MasterClientConfig, dictionary=ctx.obj)
