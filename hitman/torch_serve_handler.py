@@ -95,10 +95,11 @@ def handle(raw_data, context):
 
         start = time.perf_counter()
         input_data = bert_torchserve_handler.preprocess(raw_data)
-        logger.info("Prepro time {}".format(time.perf_counter() - start))
+        logger.debug("Prepro time {}".format(time.perf_counter() - start))
         output_data = bert_torchserve_handler.inference(input_data)
         post_processed_data = bert_torchserve_handler.postprocess(output_data)
-        logger.info("All time {}".format(time.perf_counter() - start))
+        logger.debug("All time {}".format(time.perf_counter() - start))
+        logger.debug("Output data {}".format(output_data))
 
         return post_processed_data
     except Exception as e:

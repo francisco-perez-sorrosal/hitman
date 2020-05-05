@@ -6,7 +6,7 @@ import click
 
 from hitman.client.config import MasterClientConfig, ClientConfig
 from hitman.client.hitman import MasterClient
-from hitman.server import flask_app
+from hitman.server import flask_app, quart_app
 from hitman.utils.log import setup_logging
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ def client(ctx, **kwargs):
 
 @hitman_cli.command()
 @click.option('--framework',
-              type=click.Choice(['flask', 'cherry'], case_sensitive=False))
+              type=click.Choice(['flask', 'quart'], case_sensitive=False))
 @click.pass_context
 def server(ctx, **kwargs):
     if kwargs['framework'] == 'flask':
@@ -78,6 +78,8 @@ def server(ctx, **kwargs):
         #     'processes': workers
         # }
         flask_app.run(debug=True)
+    if kwargs['framework'] == 'quart':
+        quart_app.run(debug=True)
     else:
         logger.warning("GUNICORN Server not implemented yet")
 

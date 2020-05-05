@@ -17,18 +17,18 @@ services:
         source: ./resources/prometheus.yml
         target: /etc/prometheus/prometheus.yml
 
-  inference:
-    image: nvcr.io/nvidia/tensorrt:20.03-py3
-
-    volumes:
-      - type: bind
-        source: /Users/fperez/dev/models/tensorrt
-        target: /models
-    ports:
-      - 8000:8000
-      - 8002:8002
-    command: ["trtserver", "--model-store=/models"]
-    shm_size: 1g
-    ulimits:
-      memlock: -1
-      stack: 67108864
+#  inference:
+#    image: nvcr.io/nvidia/tensorrt:20.03-py3
+#
+#    volumes:
+#      - type: bind
+#        source: /Users/fperez/dev/models/tensorrt
+#        target: /models
+#    ports:
+#      - 8000:8000
+#      - 8002:8002
+#    command: ["trtserver", "--model-store=/models"]
+#    shm_size: 1g
+#    ulimits:
+#      memlock: -1
+#      stack: 67108864

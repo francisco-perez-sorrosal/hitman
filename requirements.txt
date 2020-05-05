@@ -6,6 +6,7 @@ prometheus_client
 pytest
 pytest-cov
 pylint
+quart
 ratelimiter
 transformers
 torch

@@ -168,7 +168,7 @@ class MasterClient:
                                                                                 self.client_config.workload_type,
                                                                                 rate_limiter))
 
-                # logger.debug(results)
+                logger.debug(results)
                 i += 1
                 logger.info("End of {} batch of {}".format(i, self.client_config.workload_batch))
 

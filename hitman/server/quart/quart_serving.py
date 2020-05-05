@@ -4,11 +4,11 @@ import time
 from datetime import datetime
 from socket import getfqdn
 
+import aiohttp
 import prometheus_client
-import requests
 import torch
-from flask import Flask, request, Response, jsonify
 from prometheus_client import Counter, Histogram, CONTENT_TYPE_LATEST
+from quart import Quart, request, Response, jsonify
 from transformers import InputExample, BertForSequenceClassification
 
 from hitman.server.flask.preprocessing import input_to_vector, get_tokenizer
@@ -23,7 +23,7 @@ hostname = getfqdn()
 
 prometheus_registry = None
 
-flask_metrics = {}
+quart_metrics = {}
 
 model_type = 'bert'
 model_name = 'bert-base-uncased'
@@ -34,12 +34,12 @@ pytorch_model = None
 tokenizer = get_tokenizer(model_type=model_type, model_name=model_name, do_lower_case=True)
 
 
-def create_app(config_object="hitman.server.flask.config"):
-    app = Flask(__name__)
+def create_app(config_object="hitman.server.quart.config.Config"):
+    app = Quart(__name__)
     app.config.from_object(config_object)
 
     @app.before_first_request
-    def setup_flask_metrics():
+    async def setup_quart_metrics():
         def setup_prometheus_registry():
             global prometheus_registry
             prometheus_registry = setup_prometheus(prometheus_port, is_webserver=True)
@@ -54,31 +54,31 @@ def create_app(config_object="hitman.server.flask.config"):
             app.after_request(stop_timer)
 
             @app.route('/metrics')
-            def metrics():
+            async def metrics():
                 return Response(prometheus_client.generate_latest(prometheus_registry), mimetype=CONTENT_TYPE_LATEST)
 
-            logger.info("Flask prometheus metrics endpoint setup done")
+            logger.info("Quart prometheus metrics endpoint setup done")
             logger.info(prometheus_registry)
 
-            global flask_metrics
-            flask_metrics['web_request_count'] = Counter(
+            global quart_metrics
+            quart_metrics['web_request_count'] = Counter(
                 'web_request_count', 'App Request Count',
                 ['host', 'app_name', 'method', 'endpoint', 'http_status'],
                 registry=prometheus_registry,
             )
-            flask_metrics['web_request_latency'] = Histogram('web_request_latency_seconds', 'Request latency',
+            quart_metrics['web_request_latency'] = Histogram('web_request_latency_seconds', 'Request latency',
                                                              ['host', 'app_name', 'endpoint'],
                                                              registry=prometheus_registry,
                                                              )
-            flask_metrics['inference_latency'] = Histogram('inference_latency_seconds', 'Inference latency',
+            quart_metrics['inference_latency'] = Histogram('inference_latency_seconds', 'Inference latency',
                                                            ['host', 'app_name', 'endpoint'],
                                                            registry=prometheus_registry,
                                                            )
-            logger.info("Flask metrics registered")
+            logger.info("Quart metrics registered")
         else:
             logger.warning('No prometheus registry was registered!!!!!')
             setup_prometheus_registry()
-            setup_flask_metrics()
+            await setup_quart_metrics()
 
     gunicorn_logger = logging.getLogger('gunicorn.error')
     app.logger.handlers = gunicorn_logger.handlers
@@ -91,7 +91,7 @@ def create_app(config_object="hitman.server.flask.config"):
     return app
 
 
-flask_app = create_app()
+quart_app = create_app()
 
 
 def set_prometheus_port(port):
@@ -105,20 +105,20 @@ def start_timer():
 
 def stop_timer(response):
     resp_time = time.time() - request.start_time
-    flask_metrics['web_request_latency'].labels(hostname, 'webapp', request.path).observe(resp_time)
+    quart_metrics['web_request_latency'].labels(hostname, 'webapp', request.path).observe(resp_time)
     return response
 
 
 def record_request_data(response):
-    flask_metrics['web_request_count'].labels(hostname, 'webapp', request.method, request.path,
+    quart_metrics['web_request_count'].labels(hostname, 'webapp', request.method, request.path,
                                               response.status_code).inc()
     return response
 
 
-def process_dummy_workload(form):
+async def process_dummy_workload(form):
     t = Timer().start()
     if form['workload_type'] == 'io_bound':
-        time.sleep(flask_app.config["DUMMY_REQ_PROC_TIME_SECS"])
+        time.sleep(quart_app.config["DUMMY_REQ_PROC_TIME_SECS"])
     elif form['workload_type'] == 'cpu_bound':
         j = 0
         for i in range(100000):
@@ -127,7 +127,7 @@ def process_dummy_workload(form):
         j = 0
         for i in range(100000):
             j += 1
-        time.sleep(flask_app.config["DUMMY_REQ_PROC_TIME_SECS"])
+        time.sleep(quart_app.config["DUMMY_REQ_PROC_TIME_SECS"])
     else:
         raise RuntimeError(form['workload_type'] + " workload not supported!")
 
@@ -144,7 +144,17 @@ def perform_triton_request(data):
     pass
 
 
-def perform_tensorserve_request(data):
+_session = None
+
+
+async def get_session():
+    global _session
+    if _session is None:
+        _session = aiohttp.ClientSession()
+    return _session
+
+
+async def perform_tensorserve_request(data):
     logger.debug("Tensorserve request! Data: {}".format(data))
     bert_filtered_data = {
         'input_ids': json.dumps(data['input_ids']),
@@ -152,9 +162,11 @@ def perform_tensorserve_request(data):
         'token_type_ids': json.dumps(data['token_type_ids'])
     }
 
-    resp = requests.post("http://localhost:8080/predictions/bert_base_test",
-                         data=bert_filtered_data)
-    resp_j = json.loads(resp)
+    session = await get_session()
+    resp = await session.post("http://localhost:8080/predictions/bert_base_test", data=bert_filtered_data)
+    logger.info("Content type: {}".format(resp.content_type))
+    resp_j = await resp.read()
+    resp_j = json.loads(resp_j)
     logger.info("Tensorserve resp: {}".format(resp_j))
     return resp_j
 
@@ -169,10 +181,10 @@ def perform_local_request(data, device='cpu'):
     outputs = pytorch_model(**inputs)
     elapsed_time = time.time() - start
     logger.info("Inference elapsed time {}".format(elapsed_time))
-    flask_metrics['inference_latency'].labels(hostname, 'webapp', request.path).observe(elapsed_time)
+    quart_metrics['inference_latency'].labels(hostname, 'webapp', request.path).observe(elapsed_time)
 
 
-def process_real_workload(form):
+async def process_real_workload(form):
     if form['workload_type'] == 'cpu_bound':
         data = query_to_vector(form)
     elif form['workload_type'] == 'mixed':
@@ -181,7 +193,7 @@ def process_real_workload(form):
             perform_local_request(data)
         else:
             # perform_triton_request(data)
-            data = perform_tensorserve_request(data)
+            data = await perform_tensorserve_request(data)
             logger.info("DATA {}".format(data))
             data = json.dumps({'torchserve_resp': data})
     else:
@@ -218,17 +230,19 @@ def query_to_vector(form):
     return data
 
 
-@flask_app.route('/bert_preprocessing', methods=['POST'])
-def bert_tokenizer():
-    form = request.form
-    data = process_dummy_workload(form) if form['is_dummy_workload'] == True else process_real_workload(form)
-    return jsonify(data), 200
+@quart_app.route('/bert_preprocessing', methods=['POST'])
+async def bert_tokenizer():
+    form = await request.form
+    data = await process_dummy_workload(form) if form['is_dummy_workload'] == True else await process_real_workload(
+        form)
+    jasonified_data = jsonify(data)
+    return jasonified_data, 200
 
 
-@flask_app.errorhandler(500)
+@quart_app.errorhandler(500)
 def handle_500(error):
     return str(error), 500
 
 
 if __name__ == '__main__':
-    flask_app.run()
+    quart_app.run()
