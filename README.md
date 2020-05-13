@@ -74,6 +74,17 @@ docker pull nvcr.io/nvidia/tensorrt:20.03-py3
 sudo docker network create inference_network
 sudo docker run --gpus '"device=0"' --rm -p8000:8000 --shm-size=1g --ulimit  memlock=-1 --ulimit stack=67108864 --net inference_network --network-alias=trt_server -v/home/fperez/dev/models/tensorrt:/models nvcr.io/nvidia/tensorrt:20.03-py3 giexec --onnx=/models/bert-onnx/test/oic.onnx --device=0 --safe
 
+```
+# Get server health
+curl -v localhost:9000/api/health/live
+curl -v localhost:9000/api/health/ready
+
+# Get current models' APIs
+curl -v localhost:9000/api/status |more
+```
+
+# Several configs
+
 Single request/sec (Test mode)
 prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 1 --tcp_conn_workers 400 --debug client --workload_type mixed --child_concurrency 75 --workload_batch 1 --max_requests_per_sec 1
 prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 1 -b 127.0.0.1:5000 --log-level=debug -k gevent --worker-connections 150 --threads 1 --timeout 30 --keep-alive 30 --backlog 4096  --preload hitman.__main__:flask_app
@@ -108,3 +119,5 @@ torchserve --stop
 
 #### Note arrays to work should be 512 elements (BERT's max_seq_len)
 curl --header "Content-Type: application/json" -X POST localhost:8080/predictions/bert_base_test --data '{"input_ids": [101,9033,2290], "attention_mask": [1,1,1], "token_type_ids": [1,1,1]}'
+
+curl --header "Content-Type: application/json" -X POST localhost:9000/api/infer/oic --data '{"input_ids": [101,9033,2290], "attention_mask": [1,1,1], "token_type_ids": [1,1,1]}'
