@@ -1,4 +1,4 @@
-name: "oic"
+name: "bert"
 platform: "pytorch_libtorch"
 version_policy: {all{}}
 max_batch_size: 51
