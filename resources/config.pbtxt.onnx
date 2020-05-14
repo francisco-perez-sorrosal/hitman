@@ -1,28 +1,33 @@
-name: "bert"
+name: "oic"
 platform: "onnxruntime_onnx"
 version_policy: {all{}}
+max_batch_size: 192
+dynamic_batching {
+  preferred_batch_size: [ 1,2,4,8,16,32,64,128,192]
+  max_queue_delay_microseconds: 30000
+}
 input [
   {
     name: "input_ids"
     data_type: TYPE_INT64
-    dims: [ 1, 512 ]
+    dims: [ 512 ]
   },
   {
     name: "input_mask"
     data_type: TYPE_INT64
-    dims: [ 1, 512 ]
+    dims: [ 512 ]
   },
   {
     name: "token_type_ids"
     data_type: TYPE_INT64
-    dims: [ 1, 512 ]
+    dims: [ 512 ]
   }
 ]
 output [
   {
     name: "output"
     data_type: TYPE_FP32
-    dims: [ 1, 112 ]
+    dims: [ 112 ]
   }
 ]
 instance_group [
@@ -31,4 +36,4 @@ instance_group [
     kind: KIND_GPU
     gpus: [ 0 ]
   }
-]]
+]

@@ -43,7 +43,12 @@ class ONNXExporter(ModelExporter):
         model_path = os.path.join(self.output_dir, export_filename)
         logger.info("Exporting pytorch model to ONNX in {}".format(model_path))
         torch.onnx.export(pytorch_model, (input_ids, input_mask, token_type_ids), model_path,
-                          input_names=['input_ids', 'input_mask', 'token_type_ids'], output_names=['output'],
+                          input_names=['input_ids', 'input_mask', 'token_type_ids'],
+                          output_names=['output'],
+                          dynamic_axes={'input_ids': {0: 'batch_size'},  # variable lenght axes
+                                        'input_mask': {0: 'batch_size'},  # variable lenght axes
+                                        'token_type_ids': {0: 'batch_size'},  # variable lenght axes
+                                        'output': {0: 'batch_size'}},
                           verbose=True)
 
     def load_exported(self, exported_model_path):
@@ -105,10 +110,12 @@ def prepare_inputs(batch_size, seq_length, vocab_size, num_labels, type_vocab_si
               type=click.Choice(['onnx', 'torchscript'], case_sensitive=False))
 @click.option('--device',
               type=click.Choice(['cpu', 'cuda'], case_sensitive=False))
-@click.option('--num_labels', default=162)
+@click.option('--batch_size', default=2)
+@click.option('--max_seq_length', default=512)
+@click.option('--num_labels', default=112)
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path(exists=False))
-def bert_exporter_cli(input_dir, output_dir, target_format, device, num_labels, debug):
+def bert_exporter_cli(input_dir, output_dir, target_format, device, batch_size, max_seq_length, num_labels, debug):
     setup_logging(debug)
 
     logger.info("Exporting pytorch model from {} to {}".format(input_dir, output_dir))
@@ -127,16 +134,18 @@ def bert_exporter_cli(input_dir, output_dir, target_format, device, num_labels, 
     )
     model_pytorch.to(device)
     logger.info("Model loaded from {}".format(input_dir))
-    input_ids, input_mask, token_type_ids, labels = prepare_inputs(1, 512, model_config.vocab_size,
+    input_ids, input_mask, token_type_ids, labels = prepare_inputs(batch_size, max_seq_length, model_config.vocab_size,
                                                                    model_config.num_labels,
                                                                    model_config.type_vocab_size,
                                                                    device)
     dummy_input = {"input_ids": input_ids, "token_type_ids": token_type_ids, "attention_mask": input_mask}
 
     logger.info("Input: {}".format(dummy_input))
+    logger.info("Input Ids shape: {}".format(dummy_input['input_ids'].shape))
     dummy_output = model_pytorch(**dummy_input)
-    logger.info("Output shape: {}".format(dummy_output))
-    logger.info(dummy_output)
+    logger.info("Output: {}".format(dummy_output))
+    logger.info("Output shape: {}".format(dummy_output[0].shape))
+    logger.info("Output shape 0 : {}".format(dummy_output[0][0].shape))
 
     if target_format == "onnx":
         exporter = ONNXExporter(output_dir)
