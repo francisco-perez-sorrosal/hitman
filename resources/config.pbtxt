@@ -1,28 +1,33 @@
-name: "bert"
+name: "oic"
 platform: "pytorch_libtorch"
 version_policy: {all{}}
+max_batch_size: 51
+dynamic_batching {
+  preferred_batch_size: [ 1,2,4,8,16,32,48,51]
+  max_queue_delay_microseconds: 30000
+}
 input [
   {
     name: "input__0"
     data_type: TYPE_INT64
-    dims: [ -1, 512 ]
+    dims: [ 512 ]
   },
   {
     name: "input__1"
     data_type: TYPE_INT64
-    dims: [ -1, 512 ]
+    dims: [ 512 ]
   },
   {
     name: "input__2"
     data_type: TYPE_INT64
-    dims: [ -1, 512 ]
+    dims: [ 512 ]
   }
 ]
 output [
   {
     name: "output__0"
     data_type: TYPE_FP32
-    dims: [ -1, 112 ]
+    dims: [ 112 ]
   }
 ]
 instance_group [
