@@ -1,4 +1,4 @@
-name: "oic"
+name: "bert"
 platform: "onnxruntime_onnx"
 version_policy: {all{}}
 max_batch_size: 192

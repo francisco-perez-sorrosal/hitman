@@ -146,6 +146,8 @@ def bert_exporter_cli(input_dir, output_dir, target_format, device, batch_size, 
     logger.info("Output: {}".format(dummy_output))
     logger.info("Output shape: {}".format(dummy_output[0].shape))
     logger.info("Output shape 0 : {}".format(dummy_output[0][0].shape))
+    logger.info("Output shape 1 : {}".format(dummy_output[0][1].shape))
+    logger.info("Output 1 : {}".format(dummy_output[0][1]))
 
     if target_format == "onnx":
         exporter = ONNXExporter(output_dir)
