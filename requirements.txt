@@ -2,6 +2,7 @@ aiohttp
 aiomultiprocess
 environs
 flask
+onnxruntime
 prometheus_client
 pytest
 pytest-cov
@@ -10,3 +11,4 @@ quart
 ratelimiter
 transformers
 torch
+winmltools
