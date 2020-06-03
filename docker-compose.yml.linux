@@ -1,0 +1,35 @@
+version: "3.7"
+services:
+  prometheus:
+    image: prom/prometheus
+    restart: always
+    ports:
+      - 9090:9090
+    network_mode: host
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=48h'
+      - '--web.enable-admin-api'
+    volumes:
+      - type: bind
+        source: ./resources/prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+
+#  inference:
+#    image: nvcr.io/nvidia/tensorrt:20.03-py3
+#
+#    volumes:
+#      - type: bind
+#        source: /Users/fperez/dev/models/tensorrt
+#        target: /models
+#    ports:
+#      - 8000:8000
+#      - 8002:8002
+#    command: ["trtserver", "--model-store=/models"]
+#    shm_size: 1g
+#    ulimits:
+#      memlock: -1
+#      stack: 67108864

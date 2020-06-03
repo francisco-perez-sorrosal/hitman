@@ -1,9 +1,11 @@
 import asyncio
 import csv
 import logging
+import multiprocessing
 import os
 import time
 from multiprocessing import Process
+from multiprocessing.queues import Queue
 
 import aiohttp
 from aiomultiprocess import Pool
@@ -92,7 +94,7 @@ def worker_data():
     worker_data.request_summary
 
 
-data_queue = MPQueue()
+data_queue = MPQueue(maxsize=40000)
 
 
 class DataReader(Process):

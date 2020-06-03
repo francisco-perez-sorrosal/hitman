@@ -1,9 +1,12 @@
 import json
 import logging
+import math
 import time
 from datetime import datetime
 from socket import getfqdn
 
+import numpy as np
+from tensorrtserver.api import *
 import aiohttp
 import prometheus_client
 import torch
@@ -140,9 +143,26 @@ async def process_dummy_workload(form):
     return data
 
 
-def perform_triton_request(data):
-    pass
 
+def perform_triton_request(data):
+    infer_ctx = InferContext("localhost:9001", ProtocolType.from_str('grpc'), "oic", -1, "", True)
+    # prepare inputs
+    input_dict = {
+        "input_ids": [np.array(data['input_ids'], dtype=np.int64)],
+        "input_mask": [np.array(data['attention_mask'], dtype=np.int64)],
+        "token_type_ids": [np.array(data['token_type_ids'], dtype=np.int64)]
+    }
+    # prepare outputs
+    output_keys = [
+        "output",
+    ]
+    output_dict = {}
+    for k in output_keys:
+        output_dict[k] = InferContext.ResultFormat.RAW
+
+    result = infer_ctx.run(input_dict, output_dict, 1)
+    logger.info("TensorRT resp: {}".format(result))
+    return result
 
 _session = None
 
@@ -184,15 +204,34 @@ def perform_local_request(data, device='cpu'):
     quart_metrics['inference_latency'].labels(hostname, 'webapp', request.path).observe(elapsed_time)
 
 
+def sigmoid(x):
+    return 1 / (1 + math.exp(-x))
+
+sigmoid_v = np.vectorize(sigmoid)
+
 async def process_real_workload(form):
+    t = Timer().start()
     if form['workload_type'] == 'cpu_bound':
         data = query_to_vector(form)
     elif form['workload_type'] == 'mixed':
         data = query_to_vector(form)
         if form['inference'] == 'local':
             perform_local_request(data)
+        if form['inference'] == 'trt':
+            results = perform_triton_request(data)
+            preds = sigmoid_v(results['output'])
+            # print(result['output'][0])
+            # print(json.dumps(result['output'][0]))
+            binary_predictions = np.zeros(preds[0].shape, dtype=int)
+            for index, score in enumerate(preds[0]):
+                if float(score) > 0.5:
+                    binary_predictions[index] = int(1)
+            data = json.dumps({'pid': form['pid'],
+                'code': 'SUCCESS',
+                'req_id': form['req_id'],
+                'proc_secs': t.stop(),
+                'output': binary_predictions.tolist()})
         else:
-            # perform_triton_request(data)
             data = await perform_tensorserve_request(data)
             logger.info("DATA {}".format(data))
             data = json.dumps({'torchserve_resp': data})

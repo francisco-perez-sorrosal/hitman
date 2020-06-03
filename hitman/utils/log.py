@@ -45,9 +45,9 @@ def setup_logging(debug=False):
 def get_multiprocessor_logger(logging_mp_q, debug = False):
     log_level, log_formatter = get_log_level_and_formatter(debug)
     queue_handler = QueueHandler(logging_mp_q)
-    logger = logging.getLogger()
-    logger.setLevel(log_level)
-    logger.addHandler(queue_handler)
+    # logger = logging.getLogger()
+    # logger.setLevel(log_level)
+    # logger.addHandler(queue_handler)
     return logger
 
 

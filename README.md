@@ -58,6 +58,16 @@ histogram_quantile(0.95, sum(rate(web_request_latency_seconds_bucket{endpoint="/
 sum(rate(web_request_latency_seconds_bucket{endpoint="/bert_preprocessing", le="1.0"}[5m])) by (job)
 ```
 
+
+# Average time in GPU queue
+rate(nv_inference_queue_duration_us[1m])/(rate(nv_inference_request_success[1m])+rate(nv_inference_request_failure[1m]))*0.001
+
+
+# Requests per second at Tensor RT
+nv_inference_request_success/nv_inference_request_duration_us/0.000001
+# Inference per second at Tensor RT
+nv_inference_count/nv_inference_compute_duration_us/0.000001
+
 ```shell script
 siege -c 200 -r 2 http://localhost:5000/bert_preprocessing\?id="x"
 ```
@@ -67,6 +77,12 @@ prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 10 --tcp_co
 prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 2 -b 127.0.0.1:5000 -k gevent --worker-connections 2048 --threads 1 --timeout 5 --keep-alive 5 --backlog 4096  hitman.__main__:flask_app
 ```
 
+# Quart
+```shell script
+prometheus_multiproc_dir=/tmp/webapp_multiproc hitman_cli --debug --workers 1 --tcp_conn_workers 100 server --framework quart
+prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 16 -b 127.0.0.1:5000 -k uvicorn.workers.UvicornWorker --worker-connections 2048 --threads 8 --timeout 30 --keep-alive 30 --backlog 4096  --preload hitman.__main__:quart_app
+```
+ 
 
 # Tensor RT
 docker pull nvcr.io/nvidia/tensorrt:20.03-py3
@@ -121,3 +137,7 @@ torchserve --stop
 curl --header "Content-Type: application/json" -X POST localhost:8080/predictions/bert_base_test --data '{"input_ids": [101,9033,2290], "attention_mask": [1,1,1], "token_type_ids": [1,1,1]}'
 
 curl --header "Content-Type: application/json" -X POST localhost:9000/api/infer/oic --data '{"input_ids": [101,9033,2290], "attention_mask": [1,1,1], "token_type_ids": [1,1,1]}'
+
+
+prometheus_multiproc_dir=/tmp/webapp_multiproc gunicorn -c hitman/gunicorn_conf.py -w 145 -b 127.0.0.1:5000 -k gthread --worker-connections 2048 --threads=8 --timeout 90 --keep-alive 30 --backlog 4096  --preload hitman.__main__:flask_app
+prometheus_multiproc_dir=/tmp/clients_multiproc hitman_cli --workers 8 --tcp_conn_workers 800  client --workload_type mixed --child_concurrency 8 --workload_batch 8192 --max_requests_per_sec 768 --inference_type trt
