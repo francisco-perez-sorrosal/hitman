@@ -39,14 +39,15 @@ class ModelExporter(object):
 
 class ONNXExporter(ModelExporter):
 
-    def __init__(self, output_dir, raw_filename):
+    def __init__(self, output_dir, raw_filename, onnx_opset_version):
         self.output_dir = output_dir
         self.raw_filename = raw_filename
+        self.onnx_opset_version = onnx_opset_version
 
     def export(self, pytorch_model, input_ids, input_mask, token_type_ids, exported_filename=None):
         exported_filename = exported_filename if exported_filename else "{}.onnx".format(self.raw_filename)
         model_path = os.path.join(self.output_dir, exported_filename)
-        logger.info("Exporting pytorch model in {} to ONNX".format(model_path))
+        logger.info("Exporting pytorch model in {} to ONNX using opset_version {}".format(model_path, self.onnx_opset_version))
         torch.onnx.export(pytorch_model, (input_ids, input_mask, token_type_ids), model_path,
                           input_names=['input_ids', 'input_mask', 'token_type_ids'],
                           output_names=['output'],
@@ -54,7 +55,8 @@ class ONNXExporter(ModelExporter):
                                         'input_mask': {0: 'batch_size'},  # variable lenght axes
                                         'token_type_ids': {0: 'batch_size'},  # variable lenght axes
                                         'output': {0: 'batch_size'}},
-                          verbose=False)
+                          verbose=False,
+                          opset_version=self.onnx_opset_version)
         return model_path
 
     def load_exported(self, exported_model_path):
@@ -148,6 +150,7 @@ def prepare_inputs(batch_size, seq_length, vocab_size, num_labels, type_vocab_si
 @click.option('--fp16/--no-fp16', default=False)
 @click.option('--target_format',
               type=click.Choice(['onnx', 'torchscript'], case_sensitive=False))
+@click.option('--onnx_opset_version', default=9)
 @click.option('--device',
               type=click.Choice(['cpu', 'cuda'], case_sensitive=False))
 @click.option('--batch_size', default=2)
@@ -156,7 +159,7 @@ def prepare_inputs(batch_size, seq_length, vocab_size, num_labels, type_vocab_si
 @click.option('--raw_filename', default="model")
 @click.argument('input_dir', type=click.Path(exists=True))
 @click.argument('output_dir', type=click.Path(exists=False))
-def bert_exporter_cli(input_dir, output_dir, target_format, device, batch_size, max_seq_length, num_labels, raw_filename, fp16, debug=False):
+def bert_exporter_cli(input_dir, output_dir, target_format, onnx_opset_version, device, batch_size, max_seq_length, num_labels, raw_filename, fp16, debug=False):
     setup_logging(debug)
 
     config_class, model_class, tokenizer_class = MODEL_CLASSES[MODEL_TYPE]
@@ -189,7 +192,7 @@ def bert_exporter_cli(input_dir, output_dir, target_format, device, batch_size, 
     logger.info("Output 1 : {}".format(dummy_output[0][1]))
 
     if target_format == "onnx":
-        exporter = ONNXExporter(output_dir, raw_filename)
+        exporter = ONNXExporter(output_dir, raw_filename, onnx_opset_version)
     else:
         exporter = TorchscriptExporter(output_dir, raw_filename)
 
