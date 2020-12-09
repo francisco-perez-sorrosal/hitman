@@ -179,7 +179,7 @@ def prepare_dummy_pytorch_inputs(batch_size, seq_length, vocab_size, num_labels,
 @click.option('--onnx_opset_version', default=9)
 @click.option('--raw_filename', default="model")
 @click.option('--example_input_batch_size', default=2)
-@click.option('--example_input_max_seq_length', default=512)
+@click.option('--max_seq_length', default=512)
 @click.option('--expected_num_labels', default=245)
 @click.option('--expected_model_type', default="bert")
 @click.argument('input_dir', type=click.Path(exists=True))
@@ -190,7 +190,7 @@ def bert_exporter_cli(input_dir,
                       onnx_opset_version,
                       device,
                       example_input_batch_size,
-                      example_input_max_seq_length,
+                      max_seq_length,
                       expected_num_labels,
                       raw_filename,
                       expected_model_type,
@@ -220,7 +220,7 @@ def bert_exporter_cli(input_dir,
 
     model_pytorch.to(device)
     input_ids, input_mask, token_type_ids, _ = prepare_dummy_pytorch_inputs(example_input_batch_size,
-                                                                            example_input_max_seq_length,
+                                                                            max_seq_length,
                                                                             model_config.vocab_size,
                                                                             model_config.num_labels,
                                                                             device)
