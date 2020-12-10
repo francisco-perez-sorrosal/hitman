@@ -4,6 +4,7 @@ import random
 
 import click
 import onnx
+from onnxruntime.quantization import QuantizationMode, quantize
 import torch
 from transformers import (
     BertConfig,
@@ -12,8 +13,6 @@ from transformers import (
     DistilBertForSequenceClassification,
     AutoConfig, AutoModelForSequenceClassification,
 )
-from winmltools.utils import convert_float_to_float16
-from winmltools.utils import save_model
 
 print(torch.__version__)
 
@@ -79,16 +78,19 @@ class ONNXExporter(ModelExporter):
         # logger.debug(onnx_model)
         return onnx_model
 
-    def to_fp16(self, input_model_path=None, exported_filename=None):
+    def quantize(self, input_model_path=None, exported_filename=None):
         if not input_model_path:
-            inported_filename = "{}.onnx".format(self.raw_filename)
+            inported_filename = f"{self.raw_filename}.onnx"
             input_model_path = os.path.join(self.output_dir, inported_filename)
+        logger.info(f"Loading ONNX model to quantize from {input_model_path}")
         onnx_model = self.load_exported(input_model_path)
-        logger.info("Converting model {} to fp16!!!".format(input_model_path))
-        new_onnx_model = convert_float_to_float16(onnx_model)
-        if not exported_filename:
-            exported_filename = "{}_fp16.onnx".format(self.raw_filename)
-        save_model(new_onnx_model, os.path.join(self.output_dir, exported_filename))
+        logger.info("Quantizing...")
+        quantized_model = quantize(
+            model=onnx_model, quantization_mode=QuantizationMode.IntegerOps, force_fusions=True, symmetric_weight=True,
+        )
+        output_model_path = os.path.join(self.output_dir, exported_filename)
+        onnx.save_model(quantized_model, output_model_path)
+        logger.info(f"Quantized model saved to {output_model_path}")
 
 
 class TorchscriptExporter(ModelExporter):
@@ -171,6 +173,7 @@ def prepare_dummy_pytorch_inputs(batch_size, seq_length, vocab_size, num_labels,
 
 @click.command()
 @click.option('--debug/--no-debug', default=False)
+@click.option('--quantize/--no-quantize', default=False)
 @click.option('--fp16/--no-fp16', default=False)
 @click.option('--device',
               type=click.Choice(['cpu', 'cuda'], case_sensitive=False))
@@ -194,6 +197,7 @@ def bert_exporter_cli(input_dir,
                       expected_num_labels,
                       raw_filename,
                       expected_model_type,
+                      quantize,
                       fp16,
                       debug=False):
     setup_logging(debug)
@@ -249,8 +253,9 @@ def bert_exporter_cli(input_dir,
         onnx.checker.check_model(onnx_model)
         logger.info(onnx.helper.printable_graph(onnx_model.graph))
     logger.info(f"Model exported to {model_path}")
-    if fp16:
-        exporter.to_fp16(input_model_path=model_path)
+
+    if target_format == "onnx" and quantize:
+        exporter.quantize(input_model_path=model_path, exported_filename=f"{raw_filename}-quantized.onnx")
 
 
 if __name__ == '__main__':
